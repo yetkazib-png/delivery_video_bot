@@ -102,8 +102,9 @@ async def got_reason(message, state: FSMContext):
     first_name, last_name = user[1], user[2]
 
     # ✅ Sheets: event yozamiz
-    sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id, creds_path=cfg.google_creds_path, worksheet="Logs")
+    sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id, worksheet="Logs")
     try:
+
         append_reminder_event(
             sheets_cfg,
             first_name=first_name,

@@ -5,6 +5,8 @@ from datetime import datetime
 
 import gspread
 from google.oauth2.service_account import Credentials
+import os
+import json
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -16,8 +18,13 @@ class SheetsConfig:
     worksheet: str = "Logs"
 
 
-def _client(creds_path: str) -> gspread.Client:
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+def _client() -> gspread.Client:
+    creds_json = os.getenv("GOOGLE_CREDS_JSON")
+    if not creds_json:
+        raise RuntimeError("GOOGLE_CREDS_JSON topilmadi (Railway Variables tekshiring).")
+
+    info = json.loads(creds_json)
+    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
 

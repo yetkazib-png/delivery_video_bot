@@ -133,9 +133,7 @@ async def handle_video(message: Message, state: FSMContext):
 
     # ✅ 3) Google Sheets'ga LINK yozamiz (phone + car_plate bilan)
     sheets_cfg = SheetsConfig(
-        sheet_id=cfg.sheet_id,
-        creds_path=cfg.google_creds_path,
-        worksheet="Logs"
+        SheetsConfig(sheet_id=cfg.sheet_id, worksheet="Logs")
     )
     try:
         sheet_row = append_video_row(
