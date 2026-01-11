@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import os
+import json
 
 import gspread
 from google.oauth2.service_account import Credentials
-import os
-import json
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -14,11 +14,13 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 @dataclass
 class SheetsConfig:
     sheet_id: str
-    creds_path: str
     worksheet: str = "Logs"
 
 
 def _client() -> gspread.Client:
+    """
+    Railway Variables -> GOOGLE_CREDS_JSON ichidan Service Account JSON olinadi.
+    """
     creds_json = os.getenv("GOOGLE_CREDS_JSON")
     if not creds_json:
         raise RuntimeError("GOOGLE_CREDS_JSON topilmadi (Railway Variables tekshiring).")
@@ -41,33 +43,22 @@ def append_video_row(
 ) -> int:
     """
     Video kelganda yangi qator qo'shadi.
-    Ustunlar:
-    A Timestamp
-    B Sana
-    C Ism
-    D Familiya
-    E Telefon
-    F Avto raqam
-    G Bog'cha nomeri
-    H Video link
-    I ReminderAction
-    J Sabab
     Qaytaradi: qo'shilgan qator raqami (1-based)
     """
-    gc = _client(cfg.creds_path)
+    gc = _client()
     ws = gc.open_by_key(cfg.sheet_id).worksheet(cfg.worksheet)
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     row = [
-        ts,                 # A
-        date_str,           # B
-        first_name,         # C
-        last_name,          # D
-        phone,              # E
-        car_plate,          # F
-        kindergarten_no,    # G
-        video_link,         # H
+        ts,                 # A Timestamp
+        date_str,           # B Sana
+        first_name,         # C Ism
+        last_name,          # D Familiya
+        phone,              # E Telefon
+        car_plate,          # F Avto raqam
+        kindergarten_no,    # G Bog'cha nomeri
+        video_link,         # H Video link
         "",                 # I ReminderAction
         "",                 # J Sabab
     ]
@@ -87,11 +78,7 @@ def append_reminder_event(
     action: str,
     reason: str = "",
 ) -> int:
-    """
-    Reminder bosilganda (Yubordim / Yubormadim) event-qator yozadi.
-    Video bo'lmasa ham action/reason saqlanadi.
-    """
-    gc = _client(cfg.creds_path)
+    gc = _client()
     ws = gc.open_by_key(cfg.sheet_id).worksheet(cfg.worksheet)
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -103,10 +90,10 @@ def append_reminder_event(
         last_name,  # D
         phone,      # E
         car_plate,  # F
-        "",         # G Bog'cha nomeri
-        "",         # H Video link
-        action,     # I ReminderAction
-        reason,     # J Sabab
+        "",         # G
+        "",         # H
+        action,     # I
+        reason,     # J
     ]
 
     ws.append_row(row, value_input_option="USER_ENTERED")
@@ -114,18 +101,12 @@ def append_reminder_event(
 
 
 def update_reason(cfg: SheetsConfig, *, sheet_row: int, reason: str) -> None:
-    """
-    Sabab ustuni = J (10)
-    """
-    gc = _client(cfg.creds_path)
+    gc = _client()
     ws = gc.open_by_key(cfg.sheet_id).worksheet(cfg.worksheet)
-    ws.update_cell(sheet_row, 10, reason)
+    ws.update_cell(sheet_row, 10, reason)  # J = 10
 
 
 def update_reminder_action(cfg: SheetsConfig, *, sheet_row: int, action: str) -> None:
-    """
-    ReminderAction ustuni = I (9)
-    """
-    gc = _client(cfg.creds_path)
+    gc = _client()
     ws = gc.open_by_key(cfg.sheet_id).worksheet(cfg.worksheet)
-    ws.update_cell(sheet_row, 9, action)
+    ws.update_cell(sheet_row, 9, action)  # I = 9

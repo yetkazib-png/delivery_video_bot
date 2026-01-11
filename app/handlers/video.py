@@ -92,7 +92,6 @@ async def handle_video(message: Message, state: FSMContext):
     date = today_str()
     file_id = message.video.file_id
 
-    # get_user qaytarishi: (telegram_id, first_name, last_name, phone, car_plate)
     first_name = user[1]
     last_name = user[2]
     phone = user[3] or ""
@@ -108,7 +107,7 @@ async def handle_video(message: Message, state: FSMContext):
         f"🕒 Vaqt: {stamp}"
     )
 
-    # ✅ 1) Avval guruhga yuboramiz va message_id olamiz
+    # 1) Guruhga yuboramiz
     try:
         sent = await message.bot.send_video(
             chat_id=cfg.group_chat_id,
@@ -120,22 +119,19 @@ async def handle_video(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    # ✅ 2) Telegram link yasaymiz (Sheets uchun)
-    # -100XXXXXXXXXX -> XXXXXXXXXX
+    # 2) Telegram link yasaymiz
     internal_id = str(cfg.group_chat_id)
     if internal_id.startswith("-100"):
         internal_id = internal_id[4:]
     else:
-        # ehtiyot chorasi: noto'g'ri format bo'lsa ham link yasashga urinamiz
         internal_id = internal_id.lstrip("-")
 
     video_link = f"https://t.me/c/{internal_id}/{sent.message_id}"
 
-    # ✅ 3) Google Sheets'ga LINK yozamiz (phone + car_plate bilan)
-    sheets_cfg = SheetsConfig(
-        SheetsConfig(sheet_id=cfg.sheet_id, worksheet="Logs")
-    )
+    # 3) Sheets'ga yozamiz
+    sheet_row = None
     try:
+        sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id, worksheet="Logs")
         sheet_row = append_video_row(
             sheets_cfg,
             first_name=first_name,
@@ -148,15 +144,19 @@ async def handle_video(message: Message, state: FSMContext):
         )
     except Exception as e:
         await message.answer(f"❌ Google Sheets'ga yozilmadi: {e.__class__.__name__}")
-        sheet_row = None
 
-    # ✅ 4) DBga saqlash (sheet_row bilan)
-    await add_video(message.from_user.id, date, kindergarten_no, file_id, sheet_row=sheet_row)
+    # 4) DBga saqlash
+    await add_video(
+        message.from_user.id,
+        date,
+        kindergarten_no,
+        file_id,
+        sheet_row=sheet_row
+    )
 
-    # ✅ 5) Userga javob
+    # 5) Userga javob
     await message.answer("✅ Video qabul qilindi va guruhga yuborildi.", reply_markup=main_menu())
 
-    # Keyingi video uchun yana bog'cha nomerini so'raymiz
     await state.clear()
     await message.answer("Keyingi video uchun bog'cha nomerini kiriting (faqat raqam):")
     await state.set_state(VideoFlow.waiting_kindergarten_no)
