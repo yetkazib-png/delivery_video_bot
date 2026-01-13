@@ -142,10 +142,12 @@ async def handle_video(message: Message, state: FSMContext):
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
-    except Exception as e:
-        await message.answer(f"❌ Guruhga yuborilmadi: {e.__class__.__name__}")
-        await state.clear()
-        return
+except Exception as e:
+    # Railway logs uchun ham to'liq chiqaramiz
+    print("SEND_VIDEO_ERROR:", type(e).__name__, str(e))
+    await message.answer(f"❌ Guruhga yuborilmadi: {type(e).__name__}: {e}")
+    await state.clear()
+    return
 
     # 2) Telegram link yasaymiz
     internal_id = str(cfg.group_chat_id)
