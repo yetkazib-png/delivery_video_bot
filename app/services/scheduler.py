@@ -7,14 +7,21 @@ from app.keyboards.common import reminder_kb
 from app.db.database import get_all_users, ensure_daily_row
 from app.services.report import send_daily_report
 
-def today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
 
-async def send_reminders(bot):
+def today_str(tz: str) -> str:
+    return datetime.now(ZoneInfo(tz)).strftime("%Y-%m-%d")
+
+
+async def send_reminders(bot, timezone: str):
     users = await get_all_users()
-    date = today_str()
+    date = today_str(timezone)
 
-    for telegram_id, first_name, last_name in users:
+    for row in users:
+        # get_all_users() qaytargan row uzun bo‘lishi mumkin
+        telegram_id = row[0]
+        first_name = row[1] if len(row) > 1 else ""
+        last_name = row[2] if len(row) > 2 else ""
+
         await ensure_daily_row(telegram_id, date)
         await bot.send_message(
             chat_id=telegram_id,
@@ -22,13 +29,17 @@ async def send_reminders(bot):
             reply_markup=reminder_kb()
         )
 
+
 def setup_scheduler(bot, timezone: str) -> AsyncIOScheduler:
-    scheduler = AsyncIOScheduler(timezone=ZoneInfo(timezone))
+    tz = ZoneInfo(timezone)
+    scheduler = AsyncIOScheduler(timezone=tz)
 
-    scheduler.add_job(send_reminders, CronTrigger(hour=10, minute=0), args=[bot])
-    scheduler.add_job(send_reminders, CronTrigger(hour=15, minute=0), args=[bot])
-    scheduler.add_job(send_reminders, CronTrigger(hour=20, minute=0), args=[bot])
+    # Eslatmalar: 10:00, 15:00, 18:00 (Toshkent vaqti)
+    scheduler.add_job(send_reminders, CronTrigger(hour=10, minute=0, timezone=tz), args=[bot, timezone])
+    scheduler.add_job(send_reminders, CronTrigger(hour=15, minute=0, timezone=tz), args=[bot, timezone])
+    scheduler.add_job(send_reminders, CronTrigger(hour=18, minute=0, timezone=tz), args=[bot, timezone])
 
-    scheduler.add_job(send_daily_report, CronTrigger(hour=6, minute=0), args=[bot])
+    # Hisobot: 07:00 (Toshkent vaqti)
+    scheduler.add_job(send_daily_report, CronTrigger(hour=7, minute=0, timezone=tz), args=[bot])
 
     return scheduler
