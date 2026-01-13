@@ -21,10 +21,10 @@ router = Router()
 
 
 def today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+    return datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d")
 
 
-# --- Video yuborishni boshlash ---
+# ================= VIDEO YUBORISH BOSHLASH =================
 @router.message(F.text == "🎥 Video yuborish")
 async def ask_kindergarten_no(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
@@ -46,6 +46,7 @@ async def got_kindergarten_no(message: Message, state: FSMContext):
     await message.answer("✅ Qabul qilindi. Endi videoni yuboring.")
 
 
+# ================= VIDEO QABUL QILISH =================
 @router.message(VideoFlow.waiting_video, F.video)
 async def handle_video(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
@@ -65,40 +66,62 @@ async def handle_video(message: Message, state: FSMContext):
     date = today_str()
     file_id = message.video.file_id
 
+    # user = (telegram_id, first_name, last_name, phone, car_plate)
     first_name = user[1]
     last_name = user[2]
     phone = user[3] or ""
     car_plate = user[4] or ""
 
+    # ===== TELEGRAM USER INFO =====
+    tg = message.from_user
+    tg_id = tg.id
+
+    if tg.username:
+        t_user = f"@{tg.username}"
+    else:
+        t_user = f'<a href="tg://user?id={tg_id}">Yozish</a>'
+
+    contact_block = (
+        f"👤 Yetkazib beruvchi: {first_name} {last_name}\n"
+        f"💬 Aloqa: {t_user}\n"
+        f"🆔 Telegram ID: {tg_id}"
+    )
+
     stamp = datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d %H:%M")
+
     caption = (
         "📦 Yetkazib berish tasdiqi\n"
         f"🏫 Bog'cha №: {kindergarten_no}\n"
-        f"👤 Yetkazib beruvchi: {first_name} {last_name}\n"
+        f"{contact_block}\n"
         f"📞 Telefon: {phone}\n"
         f"🚗 Avto: {car_plate}\n"
         f"🕒 Vaqt: {stamp}"
     )
 
-    # ✅ GURUHGA YUBORISH (TO‘G‘RI try/except)
+    # ================= GURUHGA YUBORISH =================
     try:
         sent = await message.bot.send_video(
             chat_id=cfg.group_chat_id,
             video=file_id,
-            caption=caption
+            caption=caption,
+            parse_mode="HTML",
+            disable_web_page_preview=True
         )
     except Exception as e:
-        await message.answer(
-            f"❌ Guruhga yuborilmadi:\n{type(e).__name__}: {e}"
-        )
+        await message.answer(f"❌ Guruhga yuborilmadi:\n{type(e).__name__}: {e}")
         await state.clear()
         return
 
-    # Telegram link
-    internal_id = str(cfg.group_chat_id).lstrip("-100").lstrip("-")
+    # ================= TELEGRAM LINK =================
+    internal_id = str(cfg.group_chat_id)
+    if internal_id.startswith("-100"):
+        internal_id = internal_id[4:]
+    else:
+        internal_id = internal_id.lstrip("-")
+
     video_link = f"https://t.me/c/{internal_id}/{sent.message_id}"
 
-    # Sheets
+    # ================= GOOGLE SHEETS =================
     sheet_row = None
     try:
         sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id)
@@ -115,6 +138,7 @@ async def handle_video(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"❌ Google Sheets xato: {e}")
 
+    # ================= DB =================
     await add_video(
         message.from_user.id,
         date,
@@ -128,6 +152,7 @@ async def handle_video(message: Message, state: FSMContext):
     await state.set_state(VideoFlow.waiting_kindergarten_no)
 
 
+# ================= BUGUNGI HOLAT =================
 @router.message(F.text == "📄 Bugungi holatim")
 async def today_status(message: Message):
     user = await get_user(message.from_user.id)
