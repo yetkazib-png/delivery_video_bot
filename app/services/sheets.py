@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import os
 import json
 
@@ -15,6 +16,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 class SheetsConfig:
     sheet_id: str
     worksheet: str = "Logs"
+    timezone: str = "Asia/Tashkent"
 
 
 def _client() -> gspread.Client:
@@ -28,6 +30,10 @@ def _client() -> gspread.Client:
     info = json.loads(creds_json)
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
+
+
+def _now_str(tz: str) -> str:
+    return datetime.now(ZoneInfo(tz)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def append_video_row(
@@ -48,7 +54,7 @@ def append_video_row(
     gc = _client()
     ws = gc.open_by_key(cfg.sheet_id).worksheet(cfg.worksheet)
 
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = _now_str(cfg.timezone)
 
     row = [
         ts,                 # A Timestamp
@@ -81,7 +87,7 @@ def append_reminder_event(
     gc = _client()
     ws = gc.open_by_key(cfg.sheet_id).worksheet(cfg.worksheet)
 
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = _now_str(cfg.timezone)
 
     row = [
         ts,         # A

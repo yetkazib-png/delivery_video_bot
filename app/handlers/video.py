@@ -1,4 +1,6 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
+import html
 
 from aiogram import Router, F
 from aiogram.types import Message
@@ -19,8 +21,12 @@ from app.services.sheets import SheetsConfig, append_video_row
 router = Router()
 
 
-def today_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
+def now_in_tz(tz: str) -> datetime:
+    return datetime.now(ZoneInfo(tz))
+
+
+def today_str(tz: str) -> str:
+    return now_in_tz(tz).strftime("%Y-%m-%d")
 
 
 # --- MENU tugmalari state ichida ham ishlashi uchun ---
@@ -89,21 +95,41 @@ async def handle_video(message: Message, state: FSMContext):
         return
 
     cfg = load_config()
-    date = today_str()
+    date = today_str(cfg.timezone)
     file_id = message.video.file_id
 
-    first_name = user[1]
-    last_name = user[2]
+    # get_user: (telegram_id, first_name, last_name, phone, car_plate)
+    first_name = user[1] or ""
+    last_name = user[2] or ""
     phone = user[3] or ""
     car_plate = user[4] or ""
 
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    # Telegram user info
+    tg = message.from_user
+    if tg and tg.username:
+        contact_line = f"💬 Aloqa: @{tg.username}"
+    else:
+        # username yo'q bo'lsa ham admin bosib yozishi uchun link
+        # HTML parse_mode ishlaydi
+        uid = tg.id if tg else 0
+        contact_line = f'💬 Aloqa: <a href="tg://user?id={uid}">Yozish</a>'
+
+    stamp = now_in_tz(cfg.timezone).strftime("%Y-%m-%d %H:%M")
+
+    # HTML xavfsizligi uchun escape
+    fn = html.escape(first_name)
+    ln = html.escape(last_name)
+    ph = html.escape(phone)
+    car = html.escape(car_plate)
+    kg = html.escape(str(kindergarten_no))
+
     caption = (
         "📦 Yetkazib berish tasdiqi\n"
-        f"🏫 Bog'cha №: {kindergarten_no}\n"
-        f"👤 Yetkazib beruvchi: {first_name} {last_name}\n"
-        f"📞 Telefon: {phone}\n"
-        f"🚗 Avto: {car_plate}\n"
+        f"🏫 Bog'cha №: {kg}\n"
+        f"👤 Yetkazib beruvchi: {fn} {ln}\n"
+        f"{contact_line}\n"
+        f"📞 Telefon: {ph}\n"
+        f"🚗 Avto: {car}\n"
         f"🕒 Vaqt: {stamp}"
     )
 
@@ -112,7 +138,9 @@ async def handle_video(message: Message, state: FSMContext):
         sent = await message.bot.send_video(
             chat_id=cfg.group_chat_id,
             video=file_id,
-            caption=caption
+            caption=caption,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
         )
     except Exception as e:
         await message.answer(f"❌ Guruhga yuborilmadi: {e.__class__.__name__}")
@@ -125,13 +153,12 @@ async def handle_video(message: Message, state: FSMContext):
         internal_id = internal_id[4:]
     else:
         internal_id = internal_id.lstrip("-")
-
     video_link = f"https://t.me/c/{internal_id}/{sent.message_id}"
 
-    # 3) Sheets'ga yozamiz
+    # 3) Sheets'ga yozamiz (username yozilmaydi)
     sheet_row = None
     try:
-        sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id, worksheet="Logs")
+        sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id, worksheet="Logs", timezone=cfg.timezone)
         sheet_row = append_video_row(
             sheets_cfg,
             first_name=first_name,
@@ -174,12 +201,14 @@ async def video_without_flow(message: Message):
 
 @router.message(F.text == "📄 Bugungi holatim")
 async def today_status(message: Message):
+    cfg = load_config()
+
     user = await get_user(message.from_user.id)
     if not user:
         await message.answer("Avval /start orqali ro'yxatdan o'ting.")
         return
 
-    date = today_str()
+    date = today_str(cfg.timezone)
     await ensure_daily_row(message.from_user.id, date)
 
     count = await count_videos_for_user_date(message.from_user.id, date)
