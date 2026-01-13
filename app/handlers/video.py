@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from aiogram import Router, F
 from aiogram.types import Message
@@ -69,7 +70,7 @@ async def handle_video(message: Message, state: FSMContext):
     phone = user[3] or ""
     car_plate = user[4] or ""
 
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    stamp = datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d %H:%M")
     caption = (
         "📦 Yetkazib berish tasdiqi\n"
         f"🏫 Bog'cha №: {kindergarten_no}\n"
