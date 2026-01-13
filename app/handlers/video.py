@@ -134,18 +134,18 @@ async def handle_video(message: Message, state: FSMContext):
     )
 
     # 1) Guruhga yuboramiz
-    try:
-        sent = await message.bot.send_video(
-            chat_id=cfg.group_chat_id,
-            video=file_id,
-            caption=caption,
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-        )
+    # 1) Guruhga yuborish
+try:
+    sent = await message.bot.send_video(
+        chat_id=cfg.group_chat_id,
+        video=file_id,
+        caption=caption
+    )
 except Exception as e:
-    # Railway logs uchun ham to'liq chiqaramiz
-    print("SEND_VIDEO_ERROR:", type(e).__name__, str(e))
-    await message.answer(f"❌ Guruhga yuborilmadi: {type(e).__name__}: {e}")
+    await message.answer(
+        f"❌ Guruhga yuborilmadi:\n"
+        f"{type(e).__name__}: {e}"
+    )
     await state.clear()
     return
 
