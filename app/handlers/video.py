@@ -105,7 +105,6 @@ async def handle_video(message: Message, state: FSMContext):
             video=file_id,
             caption=caption,
             parse_mode="HTML",
-            disable_web_page_preview=True
         )
     except Exception as e:
         await message.answer(f"❌ Guruhga yuborilmadi:\n{type(e).__name__}: {e}")
