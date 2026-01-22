@@ -29,3 +29,8 @@ def load_config() -> Config:
         timezone=timezone,
         sheet_id=sheet_id,
     )
+
+def get_admin_ids() -> list[int]:
+    raw = os.getenv("ADMIN_IDS", "")
+    return [int(x.strip()) for x in raw.split(",") if x.strip().isdigit()]
+

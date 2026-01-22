@@ -211,3 +211,8 @@ async def get_last_video_sheet_row(telegram_id: int, date: str) -> int | None:
         )
         row = await cur.fetchone()
         return int(row[0]) if row and row[0] is not None else None
+
+async def delete_user_by_telegram_id(telegram_id: int) -> None:
+    async with get_db() as db:
+        await db.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
+        await db.commit()
