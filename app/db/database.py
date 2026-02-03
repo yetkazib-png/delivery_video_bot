@@ -216,3 +216,29 @@ async def delete_user_by_telegram_id(telegram_id: int) -> None:
     async with get_db() as db:
         await db.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
+# ✅ YANGI: Shu sanada video yuborgan haydovchilar ro'yxati
+async def get_senders_for_date(date: str):
+    """
+    Shu sanada video yuborgan haydovchilar:
+    [(telegram_id, first_name, last_name, video_count), ...]
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            """
+            SELECT
+                u.telegram_id,
+                u.first_name,
+                u.last_name,
+                COUNT(v.id) AS video_count
+            FROM videos v
+            JOIN users u ON u.telegram_id = v.telegram_id
+            WHERE v.date = ?
+            GROUP BY u.telegram_id, u.first_name, u.last_name
+            HAVING COUNT(v.id) > 0
+            ORDER BY video_count DESC, u.last_name, u.first_name
+            """,
+            (date,),
+        )
+        rows = await cur.fetchall()
+        return [(r[0], r[1], r[2], int(r[3])) for r in rows]
+
