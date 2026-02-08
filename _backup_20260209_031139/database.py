@@ -1,4 +1,4 @@
-﻿import aiosqlite
+import aiosqlite
 from datetime import datetime
 from .models import SCHEMA_SQL
 
@@ -17,23 +17,8 @@ async def init_db() -> None:
             try:
                 await db.execute(sql)
             except Exception:
+                # column allaqachon bor bo'lsa xato beradi — ignor qilamiz
                 pass
-
-        # ✅ PENDING QUEUE jadvali (internet sust bo'lsa video shu yerga tushadi)
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS pending_videos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                telegram_id INTEGER NOT NULL,
-                date TEXT NOT NULL,
-                kindergarten_no TEXT NOT NULL,
-                video_file_id TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                attempts INTEGER NOT NULL DEFAULT 0,
-                last_error TEXT
-            )
-            """
-        )
 
         await db.commit()
 
@@ -128,7 +113,7 @@ async def add_video(
     date: str,
     kindergarten_no: str,
     file_id: str,
-    sheet_row: int | None = None,
+    sheet_row: int | None = None,   # ✅ Sheets qatori raqami
 ) -> None:
     now = datetime.now().isoformat(timespec="seconds")
     async with aiosqlite.connect(DB_PATH) as db:
@@ -227,9 +212,16 @@ async def get_last_video_sheet_row(telegram_id: int, date: str) -> int | None:
         row = await cur.fetchone()
         return int(row[0]) if row and row[0] is not None else None
 
-
-# ✅ Bugun (yoki berilgan sana) kim video yuborganini olish
+async def delete_user_by_telegram_id(telegram_id: int) -> None:
+    async with get_db() as db:
+        await db.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
+        await db.commit()
+# ✅ YANGI: Shu sanada video yuborgan haydovchilar ro'yxati
 async def get_senders_for_date(date: str):
+    """
+    Shu sanada video yuborgan haydovchilar:
+    [(telegram_id, first_name, last_name, video_count), ...]
+    """
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             """
@@ -242,7 +234,7 @@ async def get_senders_for_date(date: str):
             JOIN users u ON u.telegram_id = v.telegram_id
             WHERE v.date = ?
             GROUP BY u.telegram_id, u.first_name, u.last_name
-            HAVING video_count > 0
+            HAVING COUNT(v.id) > 0
             ORDER BY video_count DESC, u.last_name, u.first_name
             """,
             (date,),
@@ -250,65 +242,3 @@ async def get_senders_for_date(date: str):
         rows = await cur.fetchall()
         return [(r[0], r[1], r[2], int(r[3])) for r in rows]
 
-
-# ✅ PENDING QUEUE: video navbatga qo'shish
-async def enqueue_pending_video(
-    telegram_id: int,
-    date: str,
-    kindergarten_no: str,
-    file_id: str,
-    last_error: str = "",
-) -> None:
-    now = datetime.now().isoformat(timespec="seconds")
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            """
-            INSERT INTO pending_videos (telegram_id, date, kindergarten_no, video_file_id, created_at, attempts, last_error)
-            VALUES (?, ?, ?, ?, ?, 0, ?)
-            """,
-            (telegram_id, date, kindergarten_no.strip(), file_id, now, last_error[:500]),
-        )
-        await db.commit()
-
-
-# ✅ PENDING QUEUE: navbatdagilarni olish
-async def get_pending_videos(limit: int = 20):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cur = await db.execute(
-            """
-            SELECT id, telegram_id, date, kindergarten_no, video_file_id, attempts
-            FROM pending_videos
-            ORDER BY id ASC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        return await cur.fetchall()
-
-
-# ✅ PENDING QUEUE: urinish + error
-async def bump_pending_attempt(pending_id: int, err: str) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            """
-            UPDATE pending_videos
-            SET attempts = attempts + 1,
-                last_error = ?
-            WHERE id = ?
-            """,
-            (str(err)[:500], pending_id),
-        )
-        await db.commit()
-
-
-# ✅ PENDING QUEUE: o'chirish (muvaffaqiyatli yuborilganda)
-async def delete_pending_video(pending_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM pending_videos WHERE id = ?", (pending_id,))
-        await db.commit()
-
-
-async def delete_user_by_telegram_id(telegram_id: int) -> None:
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
-        await db.commit()
