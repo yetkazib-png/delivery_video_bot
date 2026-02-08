@@ -1,4 +1,4 @@
-from aiogram.fsm.state import State, StatesGroup
+﻿from aiogram.fsm.state import State, StatesGroup
 
 
 class RegisterFlow(StatesGroup):
@@ -13,5 +13,4 @@ class ReasonFlow(StatesGroup):
 
 
 class VideoFlow(StatesGroup):
-    waiting_kindergarten_no = State()
     waiting_video = State()

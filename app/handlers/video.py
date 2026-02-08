@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import Router, F
@@ -19,31 +19,54 @@ from app.services.sheets import SheetsConfig, append_video_row
 
 router = Router()
 
+TZ = "Asia/Tashkent"
+
 
 def today_str() -> str:
-    return datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d")
+    return datetime.now(ZoneInfo(TZ)).strftime("%Y-%m-%d")
+
+
+def now_stamp() -> str:
+    return datetime.now(ZoneInfo(TZ)).strftime("%Y-%m-%d %H:%M")
+
+
+def extract_kindergarten_no(message: Message) -> str | None:
+    """
+    Bog'cha raqamini video caption (Добавить подпись) dan olamiz.
+    Qoidalar:
+      - faqat raqam bo'lsa: "43"
+      - yoki "Bog'cha: 43", "№43", "KG 43" - ichidagi birinchi raqam olinadi
+    """
+    cap = (message.caption or "").strip()
+    if not cap:
+        return None
+
+    if cap.isdigit():
+        return cap
+
+    import re
+    m = re.search(r"\b(\d{1,5})\b", cap)
+    if m:
+        return m.group(1)
+
+    return None
 
 
 # ================= VIDEO YUBORISH BOSHLASH =================
 @router.message(F.text == "🎥 Video yuborish")
-async def ask_kindergarten_no(message: Message, state: FSMContext):
+async def start_video(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
     if not user:
         await message.answer("Avval /start orqali ro'yxatdan o'ting.")
         return
 
+    await state.set_state(VideoFlow.waiting_video)
     await message.answer(
-        "🏫 Bog'cha nomerini kiriting (faqat raqam):",
+        "🎥 Videoni yuboring.\n\n"
+        "⚠️ Video yuborayotganda pastdagi «Добавить подпись» joyiga bog'cha nomerini yozing.\n"
+        "Masalan: 43",
         reply_markup=main_menu()
     )
-    await state.set_state(VideoFlow.waiting_kindergarten_no)
-
-
-@router.message(VideoFlow.waiting_kindergarten_no, F.text.regexp(r"^\d+$"))
-async def got_kindergarten_no(message: Message, state: FSMContext):
-    await state.update_data(kindergarten_no=message.text.strip())
-    await state.set_state(VideoFlow.waiting_video)
-    await message.answer("✅ Qabul qilindi. Endi videoni yuboring.")
 
 
 # ================= VIDEO QABUL QILISH =================
@@ -55,11 +78,13 @@ async def handle_video(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    data = await state.get_data()
-    kindergarten_no = data.get("kindergarten_no")
+    kindergarten_no = extract_kindergarten_no(message)
     if not kindergarten_no:
-        await message.answer("Bog'cha nomeri topilmadi.")
-        await state.clear()
+        await message.answer(
+            "❌ Bog'cha nomeri topilmadi.\n"
+            "Iltimos videoni qaytadan yuboring va «Добавить подпись» joyiga bog'cha nomerini yozing.\n"
+            "Masalan: 43"
+        )
         return
 
     cfg = load_config()
@@ -72,7 +97,6 @@ async def handle_video(message: Message, state: FSMContext):
     phone = user[3] or ""
     car_plate = user[4] or ""
 
-    # ===== TELEGRAM USER INFO =====
     tg = message.from_user
     tg_id = tg.id
 
@@ -87,18 +111,15 @@ async def handle_video(message: Message, state: FSMContext):
         f"🆔 Telegram ID: {tg_id}"
     )
 
-    stamp = datetime.now(ZoneInfo("Asia/Tashkent")).strftime("%Y-%m-%d %H:%M")
-
     caption = (
         "📦 Yetkazib berish tasdiqi\n"
         f"🏫 Bog'cha №: {kindergarten_no}\n"
         f"{contact_block}\n"
         f"📞 Telefon: {phone}\n"
         f"🚗 Avto: {car_plate}\n"
-        f"🕒 Vaqt: {stamp}"
+        f"🕒 Vaqt: {now_stamp()}"
     )
 
-    # ================= GURUHGA YUBORISH =================
     try:
         sent = await message.bot.send_video(
             chat_id=cfg.group_chat_id,
@@ -108,10 +129,8 @@ async def handle_video(message: Message, state: FSMContext):
         )
     except Exception as e:
         await message.answer(f"❌ Guruhga yuborilmadi:\n{type(e).__name__}: {e}")
-        await state.clear()
         return
 
-    # ================= TELEGRAM LINK =================
     internal_id = str(cfg.group_chat_id)
     if internal_id.startswith("-100"):
         internal_id = internal_id[4:]
@@ -120,7 +139,6 @@ async def handle_video(message: Message, state: FSMContext):
 
     video_link = f"https://t.me/c/{internal_id}/{sent.message_id}"
 
-    # ================= GOOGLE SHEETS =================
     sheet_row = None
     try:
         sheets_cfg = SheetsConfig(sheet_id=cfg.sheet_id)
@@ -137,7 +155,6 @@ async def handle_video(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"❌ Google Sheets xato: {e}")
 
-    # ================= DB =================
     await add_video(
         message.from_user.id,
         date,
@@ -146,9 +163,16 @@ async def handle_video(message: Message, state: FSMContext):
         sheet_row=sheet_row
     )
 
-    await message.answer("✅ Video qabul qilindi.", reply_markup=main_menu())
+    await message.answer("✅ Video qabul qilindi va guruhga yuborildi.", reply_markup=main_menu())
     await state.clear()
-    await state.set_state(VideoFlow.waiting_kindergarten_no)
+
+
+@router.message(VideoFlow.waiting_video)
+async def waiting_video_wrong(message: Message):
+    await message.answer(
+        "Iltimos, videoni yuboring.\n"
+        "Bog'cha nomerini «Добавить подпись» ga yozing."
+    )
 
 
 # ================= BUGUNGI HOLAT =================
